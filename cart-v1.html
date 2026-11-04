@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JannekCart 3D 🏎️</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #111;
+            font-family: 'Arial', sans-serif;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 1.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            pointer-events: none;
+        }
+        #controls-info {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            color: #ccc;
+            font-size: 1rem;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        }
+    </style>
+    <!-- Three.js von einem CDN laden -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="ui">JannekCart 3D 🏁</div>
+    <div id="controls-info">Steuerung: Pfeiltasten (Oben = Gas, Links/Rechts = Lenken)</div>
+
+    <script>
+        // Szene, Kamera und Renderer einrichten
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb); // Blauer Himmel
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Licht hinzufügen
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        scene.add(dirLight);
+
+        // Straße erstellen
+        const roadGeometry = new THREE.PlaneGeometry(20, 500);
+        const roadMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        const road = new THREE.Mesh(roadGeometry, roadMaterial);
+        road.rotation.x = -Math.PI / 2;
+        road.position.z = -200;
+        scene.add(road);
+
+        // Grüner Boden (Rasen links und rechts)
+        const groundGeometry = new THREE.PlaneGeometry(500, 500);
+        const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x2e8b57 });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -0.1;
+        ground.position.z = -200;
+        scene.add(ground);
+
+        // JannekCart (Das Auto aus einfachen Formen zusammengebaut)
+        const kartGroup = new THREE.Group();
+
+        // Autokörper
+        const bodyGeo = new THREE.BoxGeometry(1.5, 0.6, 3);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xff0055 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 0.5;
+        kartGroup.add(body);
+
+        // Räder
+        const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
+        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        
+        const wheelPositions = [
+            [-0.9, 0.3, 1], [0.9, 0.3, 1],
+            [-0.9, 0.3, -1], [0.9, 0.3, -1]
+        ];
+
+        wheelPositions.forEach(pos => {
+            const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+            wheel.rotation.z = Math.PI / 2;
+            wheel.position.set(...pos);
+            kartGroup.add(wheel);
+        });
+
+        scene.add(kartGroup);
+
+        // Startposition des Karts
+        kartGroup.position.set(0, 0, 0);
+
+        // Steuerung-Variablen
+        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+        let speed = 0;
+        const maxSpeed = 0.5;
+        const acceleration = 0.01;
+        const deceleration = 0.005;
+
+        window.addEventListener('keydown', (e) => { if (keys.hasOwnProperty(e.code)) keys[e.code] = true; });
+        window.addEventListener('keyup', (e) => { if (keys.hasOwnProperty(e.code)) keys[e.code] = false; });
+
+        // Animations- und Spiel-Loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Beschleunigung & Bremsen
+            if (keys.ArrowUp) {
+                speed = Math.min(speed + acceleration, maxSpeed);
+            } else if (keys.ArrowDown) {
+                speed = Math.max(speed - acceleration, -maxSpeed / 2);
+            } else {
+                if (speed > 0) speed = Math.max(speed - deceleration, 0);
+                if (speed < 0) speed = Math.min(speed + deceleration, 0);
+            }
+
+            // Lenken (nur wenn das Kart fährt)
+            if (Math.abs(speed) > 0.01) {
+                if (keys.ArrowLeft) kartGroup.rotation.y += 0.03;
+                if (keys.ArrowRight) kartGroup.rotation.y -= 0.03;
+            }
+
+            // Kart vorwärts in Blickrichtung bewegen
+            kartGroup.translateZ(-speed);
+
+            // Kamera folgt dem Kart von hinten oben
+            const cameraOffset = new THREE.Vector3(0, 3, 6);
+            const cameraPosition = cameraOffset.applyMatrix4(kartGroup.matrixWorld);
+            camera.position.copy(cameraPosition);
+            camera.lookAt(kartGroup.position.clone().add(new THREE.Vector3(0, 1, 0)));
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Fenstergrößen-Anpassung
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+
+</body>
+</html>
