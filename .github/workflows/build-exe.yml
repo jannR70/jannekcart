@@ -62,7 +62,7 @@ jobs:
               "target": "portable",
               "icon": "icon.png"
             },
-            "portable": { "artifactName": "Catan3D.exe" }
+            "portable": { "artifactName": "JannekCart.exe" }
           }
         }
         '@ | Set-Content -Path .\app\package.json -Encoding utf8
@@ -94,13 +94,13 @@ jobs:
         if ($LASTEXITCODE -ne 0) { throw "npm install fehlgeschlagen" }
         npx electron-builder --win portable --publish never
         if ($LASTEXITCODE -ne 0) { throw "Build fehlgeschlagen" }
-        if (-not (Test-Path .\dist\index.exe)) { throw "index.exe wurde nicht erzeugt" }
+        if (-not (Test-Path .\dist\JannekCart.exe)) { throw "JannekCart.exe wurde nicht erzeugt" }
 
     - name: Create GitHub Release
       shell: pwsh
       run: |
         $ErrorActionPreference = 'Stop'
-        gh release create "$env:VERSION" .\app\dist\index.exe `
+        gh release create "$env:VERSION" .\app\dist\JannekCart.exe `
           --repo "${{ github.repository }}" `
           --target "${{ github.sha }}" `
           --title "$env:RELEASE_NAME" `
