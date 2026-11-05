@@ -1,0 +1,107 @@
+name: Build JannekCart to Single EXE
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versionsnummer (z. B. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+        type: string
+      release_name:
+        description: 'Titel des Release'
+        required: false
+        default: 'JannekCart'
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ inputs.version }}
+      RELEASE_NAME: ${{ inputs.release_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - name: Prepare Electron app
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        if ($env:VERSION -notmatch '^v\d+\.\d+\.\d+$') { throw "Version muss das Format v1.2.3 haben" }
+        if (-not (Test-Path .\index.html)) { throw "index.html nicht gefunden" }
+        if (-not (Test-Path .\icon.png)) { throw "icon.png nicht gefunden" }
+
+        New-Item -ItemType Directory -Path .\app -Force | Out-Null
+        Copy-Item .\index.html .\app\index.html
+        Copy-Item .\icon.png .\app\icon.png
+
+        @'
+        {
+          "name": "JannekCart",
+          "version": "1.0.0",
+          "description": "jannekcart",
+          "author": "jannekcart",
+          "main": "main.js",
+          "build": {
+            "appId": "de.jannekcart.app",
+            "productName": "JannekCart",
+            "files": ["main.js", "index.html", "icon.png"],
+            "directories": { "output": "dist" },
+            "win": { 
+              "target": "portable",
+              "icon": "icon.png"
+            },
+            "portable": { "artifactName": "Catan3D.exe" }
+          }
+        }
+        '@ | Set-Content -Path .\app\package.json -Encoding utf8
+
+        @'
+        const { app, BrowserWindow } = require('electron');
+        const path = require('path');
+        function createWindow() {
+          const win = new BrowserWindow({ 
+            width: 1280, 
+            height: 800, 
+            autoHideMenuBar: true,
+            icon: path.join(__dirname, 'icon.png')
+          });
+          win.loadFile(path.join(__dirname, 'index.html'));
+        }
+        app.whenReady().then(createWindow);
+        app.on('window-all-closed', () => app.quit());
+        '@ | Set-Content -Path .\app\main.js -Encoding utf8
+
+    - name: Build Single EXE
+      shell: pwsh
+      working-directory: app
+      env:
+        CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      run: |
+        $ErrorActionPreference = 'Stop'
+        npm install --save-dev electron electron-builder
+        if ($LASTEXITCODE -ne 0) { throw "npm install fehlgeschlagen" }
+        npx electron-builder --win portable --publish never
+        if ($LASTEXITCODE -ne 0) { throw "Build fehlgeschlagen" }
+        if (-not (Test-Path .\dist\index.exe)) { throw "index.exe wurde nicht erzeugt" }
+
+    - name: Create GitHub Release
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        gh release create "$env:VERSION" .\app\dist\index.exe `
+          --repo "${{ github.repository }}" `
+          --target "${{ github.sha }}" `
+          --title "$env:RELEASE_NAME" `
+          --notes "Automatischer Build von JannekCart. Version: $env:VERSION"
