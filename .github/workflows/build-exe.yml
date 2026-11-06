@@ -38,9 +38,9 @@ jobs:
       shell: pwsh
       run: |
         $ErrorActionPreference = 'Stop'
-        if ($env:VERSION -notmatch '^v\d+\.\d+\.\d+$') { throw "Version muss das Format v1.2.3 haben" }
-        if (-not (Test-Path .\index.html)) { throw "index.html nicht gefunden" }
-        if (-not (Test-Path .\icon.png)) { throw "icon.png nicht gefunden" }
+        if ($env:VERSION -notmatch '^v\d+\.\d+\.\d+$') { throw "Version muss das Format v1.2.3 haben (z.B. v1.0.0)" }
+        if (-not (Test-Path .\index.html)) { throw "index.html im Hauptverzeichnis nicht gefunden" }
+        if (-not (Test-Path .\icon.png)) { throw "icon.png im Hauptverzeichnis nicht gefunden" }
 
         New-Item -ItemType Directory -Path .\app -Force | Out-Null
         Copy-Item .\index.html .\app\index.html
@@ -48,7 +48,7 @@ jobs:
 
         @'
         {
-          "name": "JannekCart",
+          "name": "jannekcart",
           "version": "1.0.0",
           "description": "jannekcart",
           "author": "jannekcart",
@@ -94,14 +94,23 @@ jobs:
         if ($LASTEXITCODE -ne 0) { throw "npm install fehlgeschlagen" }
         npx electron-builder --win portable --publish never
         if ($LASTEXITCODE -ne 0) { throw "Build fehlgeschlagen" }
-        if (-not (Test-Path .\dist\JannekCart.exe)) { throw "JannekCart.exe wurde nicht erzeugt" }
+        if (-not (Test-Path .\dist\JannekCart.exe)) { throw "JannekCart.exe wurde nicht im dist-Ordner erzeugt" }
 
-    - name: Create GitHub Release
+    - name: Create or Update GitHub Release
       shell: pwsh
       run: |
         $ErrorActionPreference = 'Stop'
-        gh release create "$env:VERSION" .\app\dist\JannekCart.exe `
-          --repo "${{ github.repository }}" `
-          --target "${{ github.sha }}" `
-          --title "$env:RELEASE_NAME" `
-          --notes "Automatischer Build von JannekCart. Version: $env:VERSION"
+        
+        # Prüfen, ob das Release bereits existiert, um Fehler zu vermeiden
+        $existingRelease = gh release view "$env:VERSION" --repo "${{ github.repository }}" 2>&1
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "Release $env:VERSION existiert bereits. Lade EXE hoch und aktualisiere..."
+          gh release upload "$env:VERSION" .\app\dist\JannekCart.exe --repo "${{ github.repository }}" --clobber
+        } else {
+          Write-Host "Erstelle neues Release $env:VERSION..."
+          gh release create "$env:VERSION" .\app\dist\JannekCart.exe `
+            --repo "${{ github.repository }}" `
+            --target "${{ github.sha }}" `
+            --title "$env:RELEASE_NAME" `
+            --notes "Automatischer Build von JannekCart. Version: $env:VERSION"
+        }
